@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ULTIMATE MECHA OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Noto+Sans+KR:wght@400;700;900&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #05050a;
+            --main-cyan: #00f0ff;
+            --main-red: #ff003c;
+            --main-green: #39ff14;
+            --main-orange: #ff9900;
+            --panel-bg: rgba(10, 15, 25, 0.85);
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--main-cyan);
+            font-family: 'Noto Sans KR', sans-serif;
+            background-image: 
+                linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .title-font { font-family: 'Orbitron', sans-serif; letter-spacing: 2px; }
+        .pixel-font { font-family: 'VT323', monospace; letter-spacing: 1px; }
+
+        /* 화면 전환 처리 */
+        .tab-screen { display: none; flex-grow: 1; overflow-y: auto; padding: 15px; }
+        .tab-screen.active { display: flex; flex-direction: column; }
+
+        /* 패널 UI */
+        .cyber-panel {
+            background: var(--panel-bg);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 240, 255, 0.1);
+            backdrop-filter: blur(5px);
+        }
+
+        /* 탭 버튼 */
+        .nav-btn {
+            background: transparent; color: #555; border: 1px solid #333;
+            transition: all 0.2s; border-bottom: none; border-radius: 8px 8px 0 0;
+        }
+        .nav-btn.active {
+            background: var(--panel-bg); color: var(--main-cyan);
+            border-color: var(--main-cyan); box-shadow: 0 -2px 10px rgba(0, 240, 255, 0.2);
+        }
+        
+        /* 공통 버튼 */
+        .action-btn {
+            background: rgba(0, 240, 255, 0.1); border: 1px solid var(--main-cyan);
+            color: var(--main-cyan); transition: 0.2s; text-transform: uppercase;
+        }
+        .action-btn:hover:not(:disabled) { background: var(--main-cyan); color: #000; box-shadow: 0 0 15px var(--main-cyan); }
+        .action-btn:disabled { opacity: 0.5; border-color: #555; color: #555; cursor: not-allowed; }
+
+        /* 애니메이션 */
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%,90%{transform:translate3d(-2px,0,0)} 20%,80%{transform:translate3d(4px,0,0)} 30%,50%,70%{transform:translate3d(-6px,0,0)} 40%,60%{transform:translate3d(6px,0,0)} }
+
+        .dmg-text {
+            position: absolute; font-size: 2rem; font-weight: 900;
+            text-shadow: 2px 2px 0 #000; animation: floatUp 1s forwards; pointer-events: none; z-index: 50;
+        }
+        @keyframes floatUp { 0%{opacity:1;transform:translateY(0) scale(1);} 100%{opacity:0;transform:translateY(-50px) scale(1.3);} }
+
+        /* HP 게이지 */
+        .hp-bg { width: 100%; height: 16px; background: #111; border: 1px solid #444; }
+        .hp-fill { height: 100%; transition: width 0.3s; }
+        .hp-player { background: var(--main-cyan); box-shadow: 0 0 8px var(--main-cyan); }
+        .hp-enemy { background: var(--main-red); box-shadow: 0 0 8px var(--main-red); }
+
+        /* 조립 파츠 선택기 */
+        .part-selector { display: flex; align-items: center; justify-content: space-between; border: 1px dashed #444; padding: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); }
+        .part-arrow { cursor: pointer; padding: 5px 15px; font-weight: bold; background: #222; border: 1px solid #555; border-radius: 4px; }
+        .part-arrow:hover { background: var(--main-cyan); color: black; border-color: var(--main-cyan); }
+    </style>
+</head>
+<body>
+
+    <!-- 최상단 헤더 & 네비게이션 -->
+    <header class="pt-4 px-4 flex flex-col md:flex-row justify-between items-end border-b border-cyan-800">
+        <div class="mb-2 md:mb-0">
+            <h1 class="text-3xl title-font font-black text-cyan-400 drop-shadow-[0_0_8px_#00f0ff] m-0">MECHA-OS <span class="text-sm">v3.0</span></h1>
+        </div>
+        <div class="flex gap-2 w-full md:w-auto overflow-x-auto">
+            <button class="nav-btn active px-4 py-2 font-bold whitespace-nowrap" onclick="switchTab('garage')">🔧 차고(조립)</button>
+            <button class="nav-btn px-4 py-2 font-bold whitespace-nowrap" onclick="switchTab('arena')">⚔️ 아레나(전투)</button>
+            <button class="nav-btn px-4 py-2 font-bold whitespace-nowrap" onclick="switchTab('space')">🚀 우주 탐험</button>
+        </div>
+    </header>
+
+    <!-- ============================================== -->
+    <!-- [탭 1] 차고 (GARAGE) : 조립 및 파츠 변경 -->
+    <!-- ============================================== -->
+    <main id="tab-garage" class="tab-screen active max-w-6xl mx-auto w-full">
+        <div class="flex flex-col lg:flex-row gap-6 h-full">
+            
+            <!-- 왼쪽: 로봇 프리뷰 및 예상 스탯 -->
+            <div class="w-full lg:w-5/12 cyber-panel p-6 flex flex-col relative rounded-lg">
+                <h2 class="title-font text-lg border-b border-cyan-900 pb-2 mb-4">BLUEPRINT VIEWER</h2>
+                <div class="flex-grow flex items-center justify-center min-h-[300px]">
+                    <div id="garage-view" class="w-48 h-64 drop-shadow-[0_0_10px_#00f0ff] transition-transform"></div>
+                </div>
+                
+                <div class="bg-black/60 p-4 border border-cyan-900/50 mt-4 text-sm font-bold rounded">
+                    <p class="text-center text-cyan-300 mb-2">EXPECTED COMBAT STATS</p>
+                    <div class="flex justify-between mb-1"><span>❤️ [HP] 내구도:</span> <span id="stat-hp" class="text-white">0</span></div>
+                    <div class="flex justify-between mb-1"><span>⚔️ [ATK] 화력:</span> <span id="stat-atk" class="text-white">0</span></div>
+                    <div class="flex justify-between"><span>💨 [EVA] 기동성:</span> <span id="stat-eva" class="text-white">0%</span></div>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 파츠 선택기 -->
+            <div class="w-full lg:w-7/12 cyber-panel p-6 flex flex-col rounded-lg">
+                <h3 class="title-font text-lg text-orange-400 border-b border-orange-900/50 pb-2 mb-4">EQUIPMENT & INVENTORY</h3>
+                <p class="text-xs text-gray-400 mb-4">* 전투에서 승리하여 새로운 부품을 약탈(Loot)하세요!</p>
+                
+                <!-- 머리 선택 -->
+                <div class="text-sm text-cyan-400 mb-1">1. HEAD (센서 모듈)</div>
+                <div class="part-selector rounded">
+                    <button class="part-arrow" onclick="cyclePart('head', -1)">◀</button>
+                    <div class="text-center flex-grow">
+                        <div id="sel-head-name" class="font-bold text-lg text-white">기본 머리</div>
+                        <div id="sel-head-stat" class="text-xs text-gray-400">HP+10, ATK+2</div>
+                    </div>
+                    <button class="part-arrow" onclick="cyclePart('head', 1)">▶</button>
+                </div>
+
+                <!-- 몸통 선택 -->
+                <div class="text-sm text-cyan-400 mb-1 mt-2">2. BODY (동력 코어)</div>
+                <div class="part-selector rounded">
+                    <button class="part-arrow" onclick="cyclePart('body', -1)">◀</button>
+                    <div class="text-center flex-grow">
+                        <div id="sel-body-name" class="font-bold text-lg text-white">기본 몸통</div>
+                        <div id="sel-body-stat" class="text-xs text-gray-400">HP+30</div>
+                    </div>
+                    <button class="part-arrow" onclick="cyclePart('body', 1)">▶</button>
+                </div>
+
+                <!-- 다리 선택 -->
+                <div class="text-sm text-cyan-400 mb-1 mt-2">3. LEGS (기동 유닛)</div>
+                <div class="part-selector rounded">
+                    <button class="part-arrow" onclick="cyclePart('legs', -1)">◀</button>
+                    <div class="text-center flex-grow">
+                        <div id="sel-legs-name" class="font-bold text-lg text-white">기본 다리</div>
+                        <div id="sel-legs-stat" class="text-xs text-gray-400">HP+10, EVA+5%</div>
+                    </div>
+                    <button class="part-arrow" onclick="cyclePart('legs', 1)">▶</button>
+                </div>
+
+                <div class="mt-auto pt-4">
+                    <button class="action-btn w-full py-4 text-xl font-bold title-font rounded" onclick="switchTab('arena')">
+                        시스템 저장 완료 (READY TO COMBAT)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============================================== -->
+    <!-- [탭 2] 아레나 (ARENA) : 전투 및 파밍 -->
+    <!-- ============================================== -->
+    <main id="tab-arena" class="tab-screen max-w-6xl mx-auto w-full">
+        
+        <!-- 시작 전 안내 화면 -->
+        <div id="arena-start-screen" class="cyber-panel p-8 text-center m-auto max-w-md rounded-lg">
+            <h2 class="text-3xl title-font font-bold mb-4 text-orange-400">SURVIVAL ARENA</h2>
+            <p class="mb-6 text-gray-300">현재 조립된 기체로 실전 테스트에 돌입합니다.<br>적을 쓰러뜨리고 부품을 빼앗으세요!</p>
+            <p class="text-xl font-bold mb-8">목표 스테이지: <span id="target-stage" class="text-cyan-400">1</span></p>
+            <button class="action-btn w-full py-4 text-xl font-bold rounded" onclick="startBattle()">출격하기 (ENGAGE)</button>
+        </div>
+
+        <!-- 전투 진행 화면 (기본 숨김) -->
+        <div id="arena-battle-screen" class="hidden flex-col gap-4 h-full">
+            
+            <!-- 상단 체력바 -->
+            <div class="flex justify-between items-end gap-6 px-2">
+                <div class="w-5/12">
+                    <div class="flex justify-between text-xs md:text-sm font-bold mb-1">
+                        <span>MY MECHA</span> <span id="hp-txt-player">100/100</span>
+                    </div>
+                    <div class="hp-bg rounded-full overflow-hidden"><div id="bar-player" class="hp-fill hp-player w-full"></div></div>
+                </div>
+                <div class="w-2/12 text-center text-xl md:text-3xl title-font text-yellow-500">VS</div>
+                <div class="w-5/12 text-right">
+                    <div class="flex justify-between text-xs md:text-sm font-bold mb-1 text-red-400 flex-row-reverse">
+                        <span>ENEMY Lv.<span id="enemy-level">1</span></span> <span id="hp-txt-enemy">100/100</span>
+                    </div>
+                    <div class="hp-bg rounded-full overflow-hidden"><div id="bar-enemy" class="hp-fill hp-enemy w-full"></div></div>
+                </div>
+            </div>
+
+            <!-- 아레나 뷰어 -->
+            <div class="flex-grow cyber-panel relative flex justify-between items-center px-4 md:px-20 overflow-hidden bg-black/60 rounded-lg">
+                <div id="battle-player" class="w-32 md:w-48 h-48 md:h-64 relative drop-shadow-[0_0_15px_#00f0ff] transition-transform"></div>
+                <div id="battle-enemy" class="w-32 md:w-48 h-48 md:h-64 relative drop-shadow-[0_0_15px_#ff003c] transition-transform" style="transform: scaleX(-1);"></div>
+                <div id="dmg-layer" class="absolute inset-0 pointer-events-none"></div>
+            </div>
+
+            <!-- 컨트롤 바 -->
+            <div class="flex flex-col md:flex-row gap-4 h-48">
+                <!-- 로그 -->
+                <div id="combat-log" class="w-full md:w-2/3 cyber-panel p-3 text-sm overflow-y-auto flex flex-col gap-1 rounded-lg bg-black/80 font-mono">
+                    <div class="text-cyan-500">>> 아레나 진입 완료. 적을 탐색합니다...</div>
+                </div>
+                <!-- 버튼 -->
+                <div class="w-full md:w-1/3 cyber-panel p-3 flex flex-col justify-center gap-2 rounded-lg">
+                    <button id="btn-atk" class="action-btn py-3 text-sm font-bold rounded" onclick="playerAction('attack')">⚔️ 공격 (ATTACK)</button>
+                    <button id="btn-def" class="action-btn py-3 text-sm font-bold rounded !border-yellow-500 !text-yellow-500 hover:!bg-yellow-500 hover:!text-black" onclick="playerAction('defend')">🛡️ 방어 (DEFEND)</button>
+                    <button id="btn-heal" class="action-btn py-3 text-sm font-bold rounded !border-green-500 !text-green-500 hover:!bg-green-500 hover:!text-black" onclick="playerAction('heal')">🔧 수리 (<span id="heal-count">3</span>)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 결과/약탈 모달 -->
+        <div id="result-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+            <div class="cyber-panel max-w-md w-full p-8 text-center flex flex-col gap-4 rounded-lg">
+                <h2 id="result-title" class="text-4xl title-font font-bold text-yellow-400">VICTORY!</h2>
+                <p id="result-desc" class="text-gray-300">적을 파괴했습니다. 잔해를 수색합니다...</p>
+                
+                <div id="loot-box" class="bg-black/50 border border-green-500 p-4 rounded hidden flex-col items-center my-2">
+                    <p class="text-green-400 font-bold mb-2 animate-pulse">✨ 새로운 부품 획득!</p>
+                    <div id="loot-svg" class="w-20 h-20 text-green-400 drop-shadow-[0_0_5px_#39ff14]"></div>
+                    <p id="loot-name" class="font-bold mt-2 text-white">부품명</p>
+                    <p id="loot-stat" class="text-xs text-gray-400">스탯</p>
+                </div>
+
+                <div class="flex flex-col gap-2 mt-4">
+                    <button id="btn-next-stage" class="action-btn py-3 font-bold rounded" onclick="startBattle()">다음 스테이지 도전</button>
+                    <button class="action-btn py-3 font-bold rounded !border-gray-500 !text-gray-400 hover:!bg-gray-600 hover:!text-white" onclick="resetToArenaStart()">전투 종료 / 차고로 가기</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============================================== -->
+    <!-- [탭 3] 우주 탐험 (SPACE NAV) : 행성별 체중 계산 -->
+    <!-- ============================================== -->
+    <main id="tab-space" class="tab-screen max-w-6xl mx-auto w-full h-full flex items-center justify-center">
+        <div class="cyber-panel p-8 max-w-lg w-full rounded-lg relative overflow-hidden">
+            <!-- 장식 -->
+            <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl"></div>
+            
+            <div class="text-center mb-6 relative z-10">
+                <h2 class="text-2xl title-font font-bold text-cyan-400">🚀 SPACE NAVIGATOR</h2>
+                <p class="text-sm text-gray-400 mt-2">행성별 기체(체중) 하중 변환기</p>
+            </div>
+
+            <div class="mb-6 relative z-10">
+                <label class="block text-sm font-bold text-gray-300 mb-2">지구에서의 기체 중량 (kg)</label>
+                <div class="flex">
+                    <input type="number" id="earth-weight" class="w-full bg-black/50 border border-cyan-800 rounded-l-md px-4 py-3 text-white focus:outline-none focus:border-cyan-400" placeholder="예: 65" min="1">
+                    <span class="bg-cyan-900 border border-l-0 border-cyan-800 rounded-r-md px-4 py-3 text-cyan-100">kg</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-6 relative z-10">
+                <button onclick="calcWeight('moon')" class="action-btn py-3 rounded text-sm flex flex-col items-center">
+                    <span class="text-2xl mb-1">🌕</span> 달 (Moon)
+                </button>
+                <button onclick="calcWeight('mars')" class="action-btn py-3 rounded text-sm flex flex-col items-center !border-red-500 !text-red-400 hover:!bg-red-500 hover:!text-white">
+                    <span class="text-2xl mb-1">🔴</span> 화성 (Mars)
+                </button>
+                <button onclick="calcWeight('jupiter')" class="action-btn py-3 rounded text-sm flex flex-col items-center !border-orange-500 !text-orange-400 hover:!bg-orange-500 hover:!text-white">
+                    <span class="text-2xl mb-1">🟠</span> 목성 (Jupiter)
+                </button>
+                <button onclick="calcWeight('saturn')" class="action-btn py-3 rounded text-sm flex flex-col items-center !border-yellow-500 !text-yellow-400 hover:!bg-yellow-500 hover:!text-white">
+                    <span class="text-2xl mb-1">🪐</span> 토성 (Saturn)
+                </button>
+            </div>
+
+            <!-- 변환 결과 출력 -->
+            <div id="space-result" class="bg-black/60 border border-cyan-900 rounded p-4 text-center hidden">
+                <p id="space-msg" class="text-sm text-gray-300 mb-2"></p>
+                <div class="text-4xl title-font font-black text-cyan-400">
+                    <span id="space-val">0</span> <span class="text-xl">kg</span>
+                </div>
+                <p id="robot-comment" class="mt-3 text-xs text-orange-300 pixel-font"></p>
+            </div>
+        </div>
+    </main>
+
+<script>
+    // ==========================================
+    // 0. 통합 데이터베이스 (로봇 파츠 & 행성 정보)
+    // ==========================================
+    const DB = {
+        head: {
+            basic: { name: "기본 헤드", hp: 10, atk: 2, eva: 0, svg: '<path d="M20,90 L20,40 L80,40 L80,90 Z" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="35" cy="65" r="5" fill="currentColor"/><circle cx="65" cy="65" r="5" fill="currentColor"/>' },
+            radar: { name: "탐색 레이더", hp: 15, atk: 5, eva: 5, svg: '<path d="M10,70 Q50,20 90,70" fill="none" stroke="currentColor" stroke-width="6"/><line x1="50" y1="70" x2="50" y2="40" stroke="currentColor" stroke-width="4"/><circle cx="50" cy="40" r="5" fill="currentColor"/><rect x="40" y="70" width="20" height="20" fill="none" stroke="currentColor" stroke-width="4"/>' },
+            sniper: { name: "스나이퍼 아이", hp: -5, atk: 20, eva: 0, svg: '<circle cx="50" cy="60" r="35" fill="none" stroke="currentColor" stroke-width="4"/><ellipse cx="65" cy="60" rx="15" ry="5" fill="currentColor"/><circle cx="70" cy="60" r="3" fill="#fff"/>' },
+            demon: { name: "데몬 스컬", hp: 40, atk: 25, eva: -5, svg: '<path d="M20,50 Q50,10 80,50 L70,90 L30,90 Z" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="40" cy="55" r="8" fill="currentColor"/><circle cx="60" cy="55" r="8" fill="currentColor"/><path d="M40,80 L45,75 L50,80 L55,75 L60,80" fill="none" stroke="currentColor" stroke-width="3"/>' }
+        },
+        body: {
+            basic: { name: "기본 장갑", hp: 30, atk: 0, eva: 0, svg: '<rect x="15" y="10" width="70" height="90" fill="none" stroke="currentColor" stroke-width="4"/><line x1="15" y1="40" x2="85" y2="40" stroke="currentColor" stroke-width="4"/><line x1="15" y1="70" x2="85" y2="70" stroke="currentColor" stroke-width="4"/>' },
+            ninja: { name: "닌자 프레임", hp: 10, atk: 5, eva: 20, svg: '<polygon points="50,10 80,40 65,100 35,100 20,40" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="50" cy="50" r="15" fill="none" stroke="currentColor" stroke-width="4"/>' },
+            tank: { name: "탱크 아머", hp: 100, atk: 0, eva: -10, svg: '<rect x="5" y="10" width="90" height="100" rx="10" fill="none" stroke="currentColor" stroke-width="4"/><rect x="25" y="30" width="50" height="60" fill="none" stroke="currentColor" stroke-width="4"/><line x1="5" y1="20" x2="95" y2="20" stroke="currentColor" stroke-width="4"/>' },
+            reactor: { name: "핵융합 코어", hp: 50, atk: 20, eva: 5, svg: '<rect x="20" y="10" width="60" height="90" rx="30" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="50" cy="55" r="15" fill="currentColor"/><path d="M20,55 L35,55 M65,55 L80,55" stroke="currentColor" stroke-width="4"/>' }
+        },
+        legs: {
+            basic: { name: "기본 관절", hp: 15, atk: 0, eva: 5, svg: '<line x1="30" y1="10" x2="30" y2="80" stroke="currentColor" stroke-width="6"/><line x1="70" y1="10" x2="70" y2="80" stroke="currentColor" stroke-width="6"/><path d="M15,95 L45,95 L30,80 Z M55,95 L85,95 L70,80 Z" fill="none" stroke="currentColor" stroke-width="4"/>' },
+            treads: { name: "무한 궤도", hp: 70, atk: 5, eva: -15, svg: '<ellipse cx="50" cy="60" rx="45" ry="30" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="30" cy="60" r="10" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="50" cy="60" r="10" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="70" cy="60" r="10" fill="none" stroke="currentColor" stroke-width="4"/>' },
+            hover: { name: "호버 부스터", hp: 10, atk: 0, eva: 25, svg: '<path d="M20,40 Q50,10 80,40 L95,70 L5,70 Z" fill="none" stroke="currentColor" stroke-width="4"/><ellipse cx="50" cy="70" rx="30" ry="10" fill="currentColor"/><line x1="30" y1="80" x2="25" y2="100" stroke="currentColor" stroke-width="4" stroke-dasharray="5"/><line x1="70" y1="80" x2="75" y2="100" stroke="currentColor" stroke-width="4" stroke-dasharray="5"/>' },
+            spider: { name: "거미 다리", hp: 40, atk: 10, eva: 10, svg: '<path d="M50,10 L30,50 L5,40 M50,10 L70,50 L95,40 M40,20 L20,70 L10,100 M60,20 L80,70 L90,100" fill="none" stroke="currentColor" stroke-width="5"/>' }
+        }
+    };
+
+    const planets = {
+        'moon': { name: '달', multi: 0.165, color: 'text-gray-300', msg: "삐리빅! 출력이 남아돕니다. 점프력이 상승합니다!" },
+        'mars': { name: '화성', multi: 0.379, color: 'text-red-400', msg: "붉은 모래가 관절에 낍니다. 구동계 점검 요망." },
+        'jupiter': { name: '목성', multi: 2.528, color: 'text-orange-400', msg: "경고! 하중이 너무 높습니다. 다리 부품 파손 주의!" },
+        'saturn': { name: '토성', multi: 1.065, color: 'text-yellow-400', msg: "지구와 비슷한 중력입니다. 시스템 안정적." }
+    };
+
+    // ==========================================
+    // 1. 공통 상태 관리 및 탭 제어
+    // ==========================================
+    let unlocked = { head: ['basic'], body: ['basic'], legs: ['basic'] };
+    let selectedIdx = { head: 0, body: 0, legs: 0 };
+    
+    // 배틀 변수
+    let stage = 1;
+    let pStats = { hp:0, maxHp:0, atk:0, eva:0, heal:3, def:false };
+    let eStats = { hp:0, maxHp:0, atk:0, eva:0, def:false, parts:{} };
+    let battleActive = false;
+    let isPlayerTurn = true;
+
+    function switchTab(tabId) {
+        if(battleActive && tabId !== 'arena') {
+            if(!confirm("현재 전투가 진행 중입니다. 정말 다른 탭으로 이동하시겠습니까? (전투는 초기화됩니다)")) return;
+            resetToArenaStart();
+        }
+
+        // 탭 UI 갱신
+        document.querySelectorAll('.tab-screen').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        event.currentTarget.classList.add('active');
+
+        if(tabId === 'garage') updateGarageUI();
+    }
+
+    // SVG 생성기
+    function genSvg(h, b, l, color) {
+        return `
+            <svg viewBox="0 0 100 250" class="w-full h-full" style="color:${color}">
+                ${l ? `<g transform="translate(0, 150)">${l.svg}</g>` : ''}
+                ${b ? `<g transform="translate(0, 50)">${b.svg}</g>` : ''}
+                ${h ? `<g transform="translate(0, -10)">${h.svg}</g>` : ''}
+            </svg>
+        `;
+    }
+
+    // ==========================================
+    // 2. 차고 (Garage) 로직
+    // ==========================================
+    function cyclePart(type, dir) {
+        selectedIdx[type] += dir;
+        if(selectedIdx[type] < 0) selectedIdx[type] = unlocked[type].length - 1;
+        if(selectedIdx[type] >= unlocked[type].length) selectedIdx[type] = 0;
+        updateGarageUI();
+    }
+
+    function updateGarageUI() {
+        const hKey = unlocked.head[selectedIdx.head];
+        const bKey = unlocked.body[selectedIdx.body];
+        const lKey = unlocked.legs[selectedIdx.legs];
+        const hD = DB.head[hKey]; const bD = DB.body[bKey]; const lD = DB.legs[lKey];
+
+        // 텍스트 반영
+        document.getElementById('sel-head-name').innerText = hD.name;
+        document.getElementById('sel-head-stat').innerText = `HP${hD.hp>0?'+':''}${hD.hp}, ATK${hD.atk>0?'+':''}${hD.atk}`;
+        document.getElementById('sel-body-name').innerText = bD.name;
+        document.getElementById('sel-body-stat').innerText = `HP${bD.hp>0?'+':''}${bD.hp}, EVA${bD.eva>0?'+':''}${bD.eva}%`;
+        document.getElementById('sel-legs-name').innerText = lD.name;
+        document.getElementById('sel-legs-stat').innerText = `HP${lD.hp>0?'+':''}${lD.hp}, EVA${lD.eva>0?'+':''}${lD.eva}%`;
+
+        // SVG 렌더링
+        document.getElementById('garage-view').innerHTML = genSvg(hD, bD, lD, '#00f0ff');
+        
+        // 스탯 합산 (기본 HP 30, ATK 10, EVA 5 부여)
+        document.getElementById('stat-hp').innerText = 30 + hD.hp + bD.hp + lD.hp;
+        document.getElementById('stat-atk').innerText = 10 + hD.atk + bD.atk + lD.atk;
+        document.getElementById('stat-eva').innerText = (5 + hD.eva + bD.eva + lD.eva) + '%';
+    }
+
+    // ==========================================
+    // 3. 전투 아레나 로직
+    // ==========================================
+    function resetToArenaStart() {
+        battleActive = false;
+        document.getElementById('arena-start-screen').classList.remove('hidden');
+        document.getElementById('arena-battle-screen').classList.add('hidden');
+        document.getElementById('arena-battle-screen').classList.remove('flex');
+        document.getElementById('result-modal').classList.add('hidden');
+        document.getElementById('target-stage').innerText = stage;
+        updateGarageUI(); // 차고 스탯 최신화
+    }
+
+    function startBattle() {
+        document.getElementById('result-modal').classList.add('hidden');
+        document.getElementById('arena-start-screen').classList.add('hidden');
+        const battleScreen = document.getElementById('arena-battle-screen');
+        battleScreen.classList.remove('hidden');
+        battleScreen.classList.add('flex');
+
+        // 플레이어 스탯 (기본 HP30, ATK10, EVA5)
+        const hD = DB.head[unlocked.head[selectedIdx.head]];
+        const bD = DB.body[unlocked.body[selectedIdx.body]];
+        const lD = DB.legs[unlocked.legs[selectedIdx.legs]];
+        
+        const tHp = 30 + hD.hp + bD.hp + lD.hp;
+        pStats = { maxHp: tHp, hp: tHp, atk: 10 + hD.atk + bD.atk + lD.atk, eva: 5 + hD.eva + bD.eva + lD.eva, heal: 3, def: false };
+
+        // 적 스탯 생성 (스테이지 비례)
+        const allH = Object.keys(DB.head); const allB = Object.keys(DB.body); const allL = Object.keys(DB.legs);
+        const eH = allH[Math.floor(Math.random() * allH.length)];
+        const eB = allB[Math.floor(Math.random() * allB.length)];
+        const eL = allL[Math.floor(Math.random() * allL.length)];
+        
+        const eHD = DB.head[eH]; const eBD = DB.body[eB]; const eLD = DB.legs[eL];
+        eStats.parts = { head: eH, body: eB, legs: eL };
+
+        const mult = 1 + ((stage - 1) * 0.2); // 스테이지당 20% 강화
+        const eHp = Math.floor((30 + eHD.hp + eBD.hp + eLD.hp) * mult);
+        const eAtk = Math.floor((10 + eHD.atk + eBD.atk + eLD.atk) * mult);
+        eStats = { ...eStats, maxHp: eHp, hp: eHp, atk: eAtk, eva: eHD.eva + eBD.eva + eLD.eva, def: false };
+
+        // 렌더링
+        document.getElementById('enemy-level').innerText = stage;
+        document.getElementById('battle-player').innerHTML = genSvg(hD, bD, lD, '#00f0ff');
+        document.getElementById('battle-enemy').innerHTML = genSvg(eHD, eBD, eLD, '#ff003c');
+        document.getElementById('battle-player').style.filter = 'none';
+        document.getElementById('battle-enemy').style.filter = 'none';
+
+        document.getElementById('combat-log').innerHTML = '';
+        logMsg(`<span class="text-orange-400">>> STAGE ${stage} 시작! 적이 출현했습니다.</span>`);
+        
+        battleActive = true; isPlayerTurn = true;
+        updateBattleBars(); setActionBtns(true);
+    }
+
+    function logMsg(msg) {
+        const log = document.getElementById('combat-log');
+        log.innerHTML += `<div>${msg}</div>`;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function updateBattleBars() {
+        const pPct = Math.max(0, (pStats.hp / pStats.maxHp) * 100);
+        document.getElementById('bar-player').style.width = pPct + '%';
+        document.getElementById('hp-txt-player').innerText = `${pStats.hp}/${pStats.maxHp}`;
+
+        const ePct = Math.max(0, (eStats.hp / eStats.maxHp) * 100);
+        document.getElementById('bar-enemy').style.width = ePct + '%';
+        document.getElementById('hp-txt-enemy').innerText = `${eStats.hp}/${eStats.maxHp}`;
+        
+        document.getElementById('heal-count').innerText = pStats.heal;
+        document.getElementById('btn-heal').disabled = pStats.heal <= 0;
+    }
+
+    function setActionBtns(state) {
+        document.getElementById('btn-atk').disabled = !state;
+        document.getElementById('btn-def').disabled = !state;
+        document.getElementById('btn-heal').disabled = (!state || pStats.heal <= 0);
+    }
+
+    function showDmg(targetId, text, color) {
+        const el = document.getElementById(targetId);
+        const div = document.createElement('div');
+        div.className = 'dmg-text'; div.innerText = text; div.style.color = color;
+        div.style.left = '40%'; div.style.top = '40%';
+        el.appendChild(div);
+        setTimeout(() => div.remove(), 1000);
+    }
+
+    // 전투 액션
+    function playerAction(act) {
+        if(!battleActive || !isPlayerTurn) return;
+        isPlayerTurn = false; setActionBtns(false); pStats.def = false;
+        const pv = document.getElementById('battle-player');
+        const ev = document.getElementById('battle-enemy');
+
+        if(act === 'attack') {
+            pv.style.transform = 'translateX(40px)';
+            setTimeout(() => pv.style.transform = 'translateX(0)', 200);
+            
+            setTimeout(() => {
+                if(Math.random()*100 < eStats.eva) {
+                    logMsg(`[MISS] 적이 빠르게 회피했습니다!`); showDmg('battle-enemy', 'MISS', '#aaa');
+                } else {
+                    let dmg = Math.floor(pStats.atk * (0.8 + Math.random()*0.4));
+                    if(eStats.def) { dmg = Math.floor(dmg * 0.4); }
+                    dmg = Math.max(1, dmg); eStats.hp -= dmg;
+                    logMsg(`[HIT] 타격 성공! 적에게 <span class="text-red-400">${dmg}</span> 피해.`);
+                    showDmg('battle-enemy', '-'+dmg, '#ff003c');
+                    ev.classList.add('shake'); setTimeout(()=>ev.classList.remove('shake'), 400);
+                }
+                checkPhase();
+            }, 200);
+        } else if(act === 'defend') {
+            pStats.def = true; logMsg(`[GUARD] 방어막 전개. 다음 피해가 감소합니다.`); checkPhase();
+        } else if(act === 'heal') {
+            pStats.heal--; const amt = Math.floor(pStats.maxHp * 0.4);
+            pStats.hp = Math.min(pStats.maxHp, pStats.hp + amt);
+            logMsg(`[REPAIR] 내구도를 <span class="text-green-400">${amt}</span> 회복했습니다.`);
+            showDmg('battle-player', '+'+amt, '#39ff14'); checkPhase();
+        }
+    }
+
+    function checkPhase() {
+        updateBattleBars();
+        if(eStats.hp <= 0) { endBattle(true); return; }
+        if(pStats.hp <= 0) { endBattle(false); return; }
+        setTimeout(enemyTurn, 800);
+    }
+
+    function enemyTurn() {
+        if(!battleActive) return;
+        eStats.def = false;
+        const pv = document.getElementById('battle-player');
+        const ev = document.getElementById('battle-enemy');
+
+        if(Math.random() < 0.75) { // 75% 공격
+            ev.style.transform = 'scaleX(-1) translateX(40px)';
+            setTimeout(() => ev.style.transform = 'scaleX(-1) translateX(0)', 200);
+
+            setTimeout(() => {
+                if(Math.random()*100 < pStats.eva) {
+                    logMsg(`[EVADE] 적의 공격을 회피했습니다!`); showDmg('battle-player', 'MISS', '#aaa');
+                } else {
+                    let dmg = Math.floor(eStats.atk * (0.8 + Math.random()*0.4));
+                    if(pStats.def) { dmg = Math.floor(dmg * 0.4); }
+                    dmg = Math.max(1, dmg); pStats.hp -= dmg;
+                    logMsg(`[DAMAGE] 피격! 기체에 <span class="text-red-400">${dmg}</span> 피해 발생.`);
+                    showDmg('battle-player', '-'+dmg, '#ff003c');
+                    pv.classList.add('shake'); setTimeout(()=>pv.classList.remove('shake'), 400);
+                }
+                finishEnemyTurn();
+            }, 200);
+        } else {
+            eStats.def = true; logMsg(`[ENEMY] 적이 장갑을 강화하고 공격을 대비합니다.`); finishEnemyTurn();
+        }
+    }
+
+    function finishEnemyTurn() {
+        updateBattleBars();
+        if(pStats.hp <= 0) { endBattle(false); return; }
+        isPlayerTurn = true; setTimeout(() => { setActionBtns(true); }, 200);
+    }
+
+    function endBattle(win) {
+        battleActive = false;
+        const modal = document.getElementById('result-modal');
+        const title = document.getElementById('result-title');
+        const desc = document.getElementById('result-desc');
+        const lootBox = document.getElementById('loot-box');
+        const btnNext = document.getElementById('btn-next-stage');
+        
+        if(win) {
+            document.getElementById('battle-enemy').style.filter = 'grayscale(1) brightness(0.3)';
+            title.innerText = "STAGE CLEARED!"; title.className = "text-4xl title-font font-bold text-yellow-400";
+            desc.innerText = "적을 파괴했습니다. 잔해를 뒤집니다...";
+            stage++;
+            
+            // 루팅
+            let loots = [];
+            if(!unlocked.head.includes(eStats.parts.head)) loots.push({t:'head', id:eStats.parts.head});
+            if(!unlocked.body.includes(eStats.parts.body)) loots.push({t:'body', id:eStats.parts.body});
+            if(!unlocked.legs.includes(eStats.parts.legs)) loots.push({t:'legs', id:eStats.parts.legs});
+
+            if(loots.length > 0) {
+                const item = loots[Math.floor(Math.random()*loots.length)];
+                unlocked[item.t].push(item.id);
+                const pD = DB[item.t][item.id];
+                lootBox.classList.remove('hidden'); lootBox.classList.add('flex');
+                document.getElementById('loot-svg').innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full">${pD.svg}</svg>`;
+                document.getElementById('loot-name').innerText = `[${item.t.toUpperCase()}] ${pD.name}`;
+                document.getElementById('loot-stat').innerText = `HP:${pD.hp} ATK:${pD.atk||0} EVA:${pD.eva||0}%`;
+            } else {
+                lootBox.classList.add('hidden'); lootBox.classList.remove('flex');
+                desc.innerText = "적을 파괴했습니다! (더 이상 얻을 부품이 없습니다)";
+            }
+            btnNext.innerText = `다음 스테이지(${stage}) 도전`; btnNext.classList.remove('hidden');
+        } else {
+            document.getElementById('battle-player').style.filter = 'grayscale(1) brightness(0.3)';
+            title.innerText = "SYSTEM FAILURE"; title.className = "text-4xl title-font font-bold text-red-500";
+            desc.innerText = "기체가 대파되었습니다. 비상 탈출합니다.";
+            lootBox.classList.add('hidden'); lootBox.classList.remove('flex');
+            btnNext.classList.add('hidden');
+        }
+        
+        setTimeout(() => modal.classList.remove('hidden'), 1000);
+    }
+
+    // ==========================================
+    // 4. 우주 탐험 (행성 체중 변환) 로직
+    // ==========================================
+    function calcWeight(planetId) {
+        const input = document.getElementById('earth-weight').value;
+        if(!input || isNaN(input) || input <= 0) {
+            alert("지구에서의 기체 중량(kg)을 정확히 입력해주세요."); return;
+        }
+
+        const data = planets[planetId];
+        const resultVal = (parseFloat(input) * data.multi).toFixed(1);
+        
+        const resBox = document.getElementById('space-result');
+        resBox.classList.remove('hidden');
+        
+        document.getElementById('space-msg').innerHTML = `<span class="font-bold ${data.color}">${data.name}</span>에 도착했습니다.<br>이곳의 중력에 따른 현재 하중:`;
+        document.getElementById('space-val').innerText = resultVal;
+        
+        // 애니메이션 트릭 (숫자 카운팅 느낌)
+        const valEl = document.getElementById('space-val');
+        let current = 0;
+        const step = resultVal / 20;
+        const timer = setInterval(() => {
+            current += step;
+            if(current >= resultVal) {
+                current = resultVal;
+                clearInterval(timer);
+                document.getElementById('robot-comment').innerText = `🤖 시스템 메시지: "${data.msg}"`;
+            }
+            valEl.innerText = current.toFixed(1);
+        }, 30);
+        
+        // 초기화
+        document.getElementById('robot-comment').innerText = "";
+    }
+
+    // 초기 실행
+    window.onload = () => {
+        updateGarageUI();
+    };
+</script>
+</body>
+</html>
